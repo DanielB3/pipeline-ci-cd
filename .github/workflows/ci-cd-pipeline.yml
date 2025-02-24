@@ -41,18 +41,17 @@ jobs:
     - name: Setup SSH
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/private_key.pem
-        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+        echo "$SSH_PRIVATE_KEY" > ~/.ssh/my_ec2_key.pem
+        chmod 600 ~/.ssh/my_ec2_key.pem
+        ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
 
     - name: Deploy to EC2
       run: |
-        ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
-        sudo apt update -y
-        sudo apt install -y python3-pip
-        pip3 install flask gunicorn
-        cd ~/app || mkdir ~/app && cd ~/app
-        git clone https://github.com/DanielB3/pipeline-ci-cd.git || (cd pipeline-ci-cd && git pull)
-        cd pipeline-ci-cd
-        nohup gunicorn --bind 0.0.0.0:5000 app:app > app.log 2>&1 &
+        ssh -o StrictHostKeyChecking=no -i ~/.ssh/my_ec2_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+        cd /home/ubuntu/app
+        git pull origin main
+        pip install -r requirements.txt
+        sudo systemctl restart flask-app
         EOF
