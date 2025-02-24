@@ -56,13 +56,5 @@ jobs:
         source venv/bin/activate
         pip install -r requirements.txt
 
-    - name: Deploy application
-      env:
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        SERVER_IP: ${{ secrets.SERVER_IP }}
-        DEPLOY_PATH: "/var/www/flask-app"
-      run: |
-        echo "$SSH_PRIVATE_KEY" > private_key.pem
-        chmod 600 private_key.pem
-        scp -i private_key.pem -r . ubuntu@$SERVER_IP:$DEPLOY_PATH
-        ssh -i private_key.pem ubuntu@$SERVER_IP "cd $DEPLOY_PATH && source venv/bin/activate && flask run --host=0.0.0.0"
+    - name: Skip deploy (no server available)
+      run: echo "Skipping deployment since no server is configured"
