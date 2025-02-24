@@ -1,4 +1,4 @@
-name: CI/CD Flask App
+name: CI/CD Pipeline for Flask App
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,38 +23,36 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m venv venv
-        source venv/bin/activate
-        pip install -r requirements.txt
-
-    - name: Compile application
-      run: |
-        source venv/bin/activate
-        python -m compileall .
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: Run tests
       run: |
-        source venv/bin/activate
         pytest tests/
 
   deploy:
-    needs: build
+    needs: build-and-test
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-
-    - name: Install dependencies
+    - name: Setup SSH
       run: |
-        python -m venv venv
-        source venv/bin/activate
-        pip install -r requirements.txt
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-    - name: Skip deploy (no server available)
-      run: echo "Skipping deployment since no server is configured"
+    - name: Deploy to EC2
+      run: |
+        ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+        sudo apt update -y
+        sudo apt install -y python3-pip
+        pip3 install flask gunicorn
+        cd ~/app || mkdir ~/app && cd ~/app
+        git clone https://github.com/DanielB3/pipeline-ci-cd.git || (cd pipeline-ci-cd && git pull)
+        cd pipeline-ci-cd
+        nohup gunicorn --bind 0.0.0.0:5000 app:app > app.log 2>&1 &
+        EOF
